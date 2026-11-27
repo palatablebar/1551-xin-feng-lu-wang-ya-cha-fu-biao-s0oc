@@ -9,6 +9,7 @@ from .flow_subspace import service as model_service
 from .fan_replay import service as calibration_service
 from .building_cohorts import service as monitor_service
 from .filter_inspection import service as dispatch_service
+from .shift_control import service as shift_service
 from .hvac_reconciliation import service as audit_service
 from .pressure_epochs import contracts as window_contract
 
@@ -20,6 +21,7 @@ MODULES = (('duct_checklists', '机组点检'),
  ('fan_replay', '标定回放'),
  ('building_cohorts', '机房分组'),
  ('filter_inspection', '过滤复标'),
+ ('shift_control', '偏移冻结'),
  ('hvac_reconciliation', '设备核销'))
 DISPLAY = {'title': '新风滤网压差复标',
  'object_name': '新风机组',
@@ -104,22 +106,27 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
     drift = monitor_service.scan_current(baseline, features.live, state.fingerprint)
     coverage = monitor_service.coverage_by_group(features.calibration, features.live)
     allocation = dispatch_service.plan_jobs(checked_live, drift.domain, capacity, mode)
-    closed = audit_service.close_batch(documents, intake, windows, allocation, state.fingerprint, kernel.name, mode)
+    shift_control = shift_service.evaluate_shift_control(
+        baseline, features.live, features.calibration, kernel,
+        state.fingerprint, fitted_calibration, features.train, features.live, allocation)
+    controlled = shift_service.apply_shift_control(allocation, shift_control)
+    closed = audit_service.close_batch(documents, intake, windows, controlled, state.fingerprint, kernel.name, mode)
     states = dict(closed.totals.states)
     overview = [
-        {'label': '当班新风机组', 'value': len(allocation.jobs)},
+        {'label': '当班新风机组', 'value': len(controlled.jobs)},
         {'label': '已分派', 'value': states.get('已分派', 0)},
+        {'label': '偏移冻结', 'value': states.get('冻结', 0)},
         {'label': '候补', 'value': states.get('候补', 0)},
         {'label': '暂停及人工判读', 'value': states.get('暂停', 0) + states.get('人工判读', 0)},
-        {'label': '额度结余', 'value': allocation.balance},
+        {'label': '额度结余', 'value': controlled.balance},
     ]
     vectors = {item.key: item for item in features.live}
-    row_list = rows_for(allocation, scored, vectors)
+    row_list = rows_for(controlled, scored, vectors)
     operating_rows = dispatch_service.operating_ledger(row_list)
     overtime = calibration_service.boundary_diagnostics(evaluated, 0.6)
     sector = calibration_service.sector_replay(evaluated, 0.6)
     operating_shift = monitor_service.shop_floor_shift(features.train, features.live)
-    field_evidence = audit_service.sign_field_evidence(row_list, allocation)
+    field_evidence = audit_service.sign_field_evidence(row_list, controlled)
     features_glance = feature_service.feature_evidence(state) + feature_service.measure_review(features)
     weight_rows = [{'量测': key, '取值': value} for key, value in kernel.evidence]
     ignored = [issue.evidence() for issue in intake.issues]
@@ -130,8 +137,9 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
         stage_at(3, kernel.name, weight_rows + model_service.inspection_rows(kernel, features) + comparison_rows(scored)),
         stage_at(4, f'{fitted_calibration.method} · {performance.status} · {performance.count} 条回放实绩', calibration_service.calibration_evidence(performance) + [overtime] + sector),
         stage_at(5, f'{drift.status} · {len(drift.domain)} 张单据需外推判读', monitor_service.shift_evidence(drift, coverage) + operating_shift),
-        stage_at(6, f'本班占用 {allocation.capacity-allocation.balance} / {allocation.capacity} 个工位单位', dispatch_service.action_evidence(allocation) + dispatch_service.operating_group(checked_live, allocation)),
-        stage_at(7, f'处置凭证 {closed.stamp} · 额度守恒', audit_service.reconciliation_evidence(closed) + field_evidence['执行业务单']),
+        stage_at(6, f'本班占用 {controlled.capacity-controlled.balance} / {controlled.capacity} 个工位单位', dispatch_service.action_evidence(controlled) + dispatch_service.operating_group(checked_live, controlled)),
+        stage_at(7, f'偏移边界 {len(shift_control.scope.scoped_keys)} 张 · 冻结 {len(shift_control.frozen_keys)} 张 · 放行 {len(shift_control.released_keys)} 张', shift_service.control_evidence(shift_control)),
+        stage_at(8, f'处置凭证 {closed.stamp} · 额度守恒', audit_service.reconciliation_evidence(closed) + field_evidence['执行业务单']),
     ]
     details[6]['operating_rows'] = operating_rows
     details[6]['operating_title'] = '标准档复标单'
@@ -146,12 +154,19 @@ def execute(documents, capacity=12, mode='balanced', *, as_of=96):
         current = vectors[row['key']]
         row['alternatives'] = feature_service.render_interventions(current, state, estimate)
         row['joint_experiments'] = feature_service.render_joint_experiments(current,state,estimate)
-    details[7]['records'].extend(audit_service.site_checklist(row_list))
-    details[7]['records'].extend(audit_service.intervention_summary(row_list))
+    details[8]['records'].extend(audit_service.site_checklist(row_list))
+    details[8]['records'].extend(audit_service.intervention_summary(row_list))
     overview_report = {'capacity' : capacity, 'mode': mode, 'as_of': as_of, 'sample_hash': closed.batch_hash,
               'policy_hash': closed.policy_hash, 'feature_stamp': state.fingerprint,
               'model': kernel.name, 'run_id': closed.stamp, 'object_name': DISPLAY['object_name'],
               'unit': DISPLAY['unit'], 'sections': details, 'flow_counts': list(states.items()),
+              'shift_control': {
+                  'shifted_cohorts': list(shift_control.scope.shifted_cohorts),
+                  'scoped_keys': list(shift_control.scope.scoped_keys),
+                  'frozen_keys': list(shift_control.frozen_keys),
+                  'released_keys': list(shift_control.released_keys),
+                  'dispatched_in_scope': shift_control.dispatched_in_scope,
+              },
               'measures': {'pressure_pa': ('滤网压差', 'Pa'),
  'fan_pct': ('风机档位', '%'),
  'flow_cmh': ('供风量', 'm³/h'),

@@ -38,7 +38,7 @@ def collect_filter_age(measures, missing, estimate):
 def check_hvac_reconciliation(records):
     guide = []
     for ticket in records:
-        if ticket['state'] not in ('已分派','暂停','人工判读'):
+        if ticket['state'] not in ('已分派','暂停','人工判读','冻结'):
             continue
         measures=ticket['measurements']
         absent=ticket['unmeasured']

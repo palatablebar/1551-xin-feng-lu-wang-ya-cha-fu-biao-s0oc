@@ -31,7 +31,8 @@ def check_flow(intake, windows, dispatched):
     phases = Counter()
     for item in dispatched.jobs:
         phases[item.state] += 1
-        if item.state=='已分派':
+        # 冻结单仍占工位并计入凭证，与已分派单一同消耗额度。
+        if item.state in ('已分派', '冻结'):
             actual_used[item.cohort] += item.cost
     if actual_used != dict(dispatched.used_by_group):
         raise ArithmeticError('各区记录的任务工位数不一致')

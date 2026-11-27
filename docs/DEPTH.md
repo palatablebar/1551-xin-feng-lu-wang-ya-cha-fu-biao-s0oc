@@ -16,6 +16,7 @@ AI/ML · 传统ML · 中型
 | M6 | 机房分组 | 差异定位和外推审查 | `src/ductwatch/building_cohorts/service.py` | `tests/test_building_cohorts.py` |
 | M7 | 过滤复标 | 硬规则与额度分配 | `src/ductwatch/filter_inspection/service.py` | `tests/test_filter_inspection.py` |
 | M8 | 设备核销 | 单据及额度证据 | `src/ductwatch/hvac_reconciliation/service.py` | `tests/test_hvac_reconciliation.py` |
+| M9 | 偏移冻结 | 偏移定界与冻结/重算放行 | `src/ductwatch/shift_control/service.py` | `tests/test_shift_control.py` |
 
 ## 深度登记
 
@@ -30,3 +31,6 @@ AI/ML · 传统ML · 中型
 | TRAP-44 | 校准样本不足 | 分派前转人工判读并保留原因 | `src/ductwatch/fan_replay/service.py` | `tests/test_fan_replay.py::test_empty_calibration_requires_review` |
 | TRAP-53 | 单条推断与混批 | 复用冻结参数，各条估计完全一致 | `src/ductwatch/flow_subspace/service.py` | `tests/test_flow_subspace.py::test_input_batch_invariance` |
 | TRAP-54 | 特征版本与模型不配对 | 拒绝继续推断并要求重拟合 | `src/ductwatch/flow_subspace/service.py` | `tests/test_flow_subspace.py::test_mismatched_model_input_version_fails` |
+| TRAP-61 | 偏移范围划大或划小 | 整区阈值与单元级证据取并集，仅作用于范围内已派出单 | `src/ductwatch/shift_control/service.py` | `tests/test_shift_control.py::test_unknown_cohort_dispatched_ticket_is_frozen` |
+| TRAP-62 | 冻结单工位与凭证 | 冻结不释放工位，额度按已分派加冻结守恒 | `src/ductwatch/hvac_reconciliation/control.py` | `tests/test_workbench.py::test_shift_freeze_keeps_workstation_and_voucher_balanced` |
+| TRAP-63 | 同批重算一致性 | 冻结特征、模型与校准，名单和凭证逐位一致 | `src/ductwatch/shift_control/service.py` | `tests/test_workbench.py::test_moderate_shift_recalculates_and_releases_dispatched_tickets` |

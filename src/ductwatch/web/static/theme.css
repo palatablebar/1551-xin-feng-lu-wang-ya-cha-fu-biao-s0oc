@@ -84,6 +84,7 @@ tr:hover td { background: var(--wash); }
 .item-link { border: 0; padding: 4px 1px; background: transparent; color: var(--accent); font-family: var(--font-num); text-decoration: underline; text-underline-offset: 3px; }
 .state { white-space: nowrap; padding: 2px 5px; border: 1px solid var(--line); border-radius: min(4px, var(--radius)); color: var(--quiet); }
 .state[data-state=已分派] { color: var(--accent); border-color: var(--accent); }
+.state[data-state=冻结] { color: #8fc7e8; border-color: currentColor; }
 .state[data-state=暂停] { color: var(--hold-color, #ad4a38); border-color: currentColor; }
 .detail-note { margin: 0 var(--pad) 10px; }
 .thermal .record-fields { display: grid; grid-template-columns: max-content minmax(0, 1fr); padding: 6px var(--pad) 13px; gap: 7px 11px; margin: 13px 0 0; }

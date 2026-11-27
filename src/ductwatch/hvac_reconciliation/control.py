@@ -13,7 +13,8 @@ def accountable_plan(rows, actual_balance, starting_capacity):
         seen.add(key)
         state = row['state']
         counts[state] += 1
-        if state == '已分派':
+        # 冻结单仍占工位并计入凭证，与已分派单一同消耗额度。
+        if state in ('已分派', '冻结'):
             total += row['cost']
         if not isfinite(row['estimate']):
             raise ArithmeticError('非有限估计不能签发')
@@ -41,7 +42,7 @@ def register_hvac_reconciliation(measurements, estimate):
 def document_control(rows):
     register = []
     for row in rows:
-        if row['state'] not in {'已分派', '暂停', '人工判读'}:
+        if row['state'] not in {'已分派', '暂停', '人工判读', '冻结'}:
             continue
         note = register_hvac_reconciliation(row['measurements'], row['estimate'])
         register.append({'单号': row['key'], '区段': row['zone'], '处置': row['state'], **note})
